@@ -1,5 +1,5 @@
 # Google Apps Script Project: cGcsStore
-This repo (cGcsStore) was automatically updated on 21 October 2016 12:05:10 BST by GasGit
+This repo (cGcsStore) was automatically updated on 02 November 2016 14:05:06 GMT by GasGit
 
 For more information see the [desktop liberation site](http://ramblings.mcpher.com/Home/excelquirks/drivesdk/gettinggithubready "desktop liberation") or [contact me on G+](https://plus.google.com/+BruceMcpherson "Bruce McPherson - GDE")
 ## Details for Apps Script project cGcsStore
