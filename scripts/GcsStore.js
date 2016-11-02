@@ -20,6 +20,41 @@ function GcsStore() {
       gcsUploadEndpoint_ = "https://www.googleapis.com/upload/storage/v1/b",
       compress_ = false;
   
+  /**
+   * set a predefined acl as defined in https://cloud.google.com/storage/docs/access-control/lists#predefined-acl
+   * @param {string{ key the key
+   * @param {string} predefinedAcl one of the values for this from docs above
+   * @return {object} the result
+   */
+  self.patchPredefinedAcl = function (key,predefinedAcl) {
+    return throwRob_ (
+      'error setting predefinedAcl:' + predefinedAcl,
+      fetch_ (gcsEndpoint_ + "/" + bucket_ + "/o/" + encodeURIComponent(fudgeKey_(key)) + "?predefinedAcl=" + predefinedAcl  , {
+      method:"PATCH",
+        payload:JSON.stringify ({
+          acl:[]
+        }),
+          contentType:"application/json; charset=UTF-8"
+    }));
+  };
+  
+  
+  /**
+  * @param {string} key get a self link
+  * @return {string} shttps://www.googleapis.com/storage/v1/b/xliberation.com/o/dump%2Fblogplay.json?fields=selfLink&key={YOUR_API_KEY}elf link
+  */
+  self.getSelfLink = function (key) {
+    
+    var rob = 
+      fetch_ (getBucketPath_() + "/o/" + encodeURIComponent(fudgeKey_(key)) + "?fields=selfLink");
+
+    if (!rob.ok ) {
+      throwRob_ ('error getting selfLink for ' + key ,rob);
+    }
+    return rob.error ? "" : rob.data.selfLink.replace(/s+$/g,"");
+
+    
+  };
   
   /**
   * this cleans up any records that are expired in the bucket
@@ -169,16 +204,23 @@ function GcsStore() {
   self.get = function (key) {
     
     // get the meta data 
-    var rob = throwRob_ (
-      'failed to get data for key ' + key ,
-      fetch_ (getBucketPath_() + "/o/" + encodeURIComponent(fudgeKey_(key)) + "?fields=mediaLink%2Cid%2Cmetadata%2Cname")
-    );
+    var rob = 
+      fetch_ (getBucketPath_() + "/o/" + encodeURIComponent(fudgeKey_(key)) + "?fields=mediaLink%2Cid%2Cmetadata%2Cname");
+
+    if (!rob.ok &&  rob.code !== 404 ) {
+      throwRob_ ('error getting metadata for ' + key ,rob);
+    }
     
-    // if not epired, get the data
-    var metaData = rob.data.metadata || {};
-    if (!isExpired_(metaData)) {
-      var dob = throwRob_ ('failed to get media for key ' + key , fetch_ (rob.data.mediaLink,undefined,metaData) );
-      return dob.blob || dob.data;
+    if (rob.ok) {
+      // if not epired, get the data
+      var metaData = rob.data.metadata || {};
+      if (!isExpired_(metaData)) {
+        var dob = throwRob_ ('failed to get media for key ' + key , fetch_ (rob.data.mediaLink,undefined,metaData) );
+        return dob.blob || dob.data;
+      }
+      else {
+        return null;
+      }
     }
     else {
       return null;
@@ -306,6 +348,7 @@ function GcsStore() {
         contentType:ob.contentType,
         payload:ob.value
       };
+
       var metaData = { metadata: {expires:expires,inputType:ob.inputType,compress:compress,originalType:ob.originalType},name:fudgeKey_(key)};
       rob = fetch_ ( gcsEndpoint_ + "/" + bucket_ + "/o"  , options ,metaData);
     }
