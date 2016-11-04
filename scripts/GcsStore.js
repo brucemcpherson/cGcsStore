@@ -11,6 +11,7 @@ function GcsStore() {
   var DEFAULT_EXPIRY = 0; // dont expire
   var DEFAULT_VISIBILITY = "global/"; 
   var MAXPOSTSIZE = 1024*1024*4;
+  var DEFAULT_CORS_AGE = 1800;
   
   var bucket_,
       expiry_ = DEFAULT_EXPIRY,
@@ -18,6 +19,7 @@ function GcsStore() {
       accessToken_,
       gcsEndpoint_ = "https://www.googleapis.com/storage/v1/b",
       gcsUploadEndpoint_ = "https://www.googleapis.com/upload/storage/v1/b",
+      gcsPublicEndpoint_ = "https://storage.googleapis.com",
       compress_ = false;
   
   /**
@@ -38,20 +40,120 @@ function GcsStore() {
     }));
   };
   
+  /**
+   * get the current cors setting
+   * @return {[object]} the current cors object
+   */
+  self.getCors = function () {
+    
+    var rob = throwRob_ ("error getting cors " , fetch_ (getBucketPath_ () + "?cors"));
+    return rob.data.cors || [];
+  };
+  
+  /**
+   * set the current cors setting
+   * @param {string|[object]|[string]} cors to set
+   * @return {GcsStore} self 
+   */
+  self.patchCors = function(cors) {
+    var corp = [];
+    
+    if (cors) {
+      
+      // single origin default
+      if (!Array.isArray (cors)) {
+        cors = [cors];
+      }
+    
+      // copy cors & make defaults
+      corp = JSON.parse(JSON.stringify(cors));
+      
+      // for simplicity, an array of strings will use all the default settings
+      var origins = corp.filter (function(d) {
+        return typeof d === "string"; 
+      });
+      
+      // check all or nothing
+      if (origins.length) {
+        if (origins.length !== corp.length) {
+          throw 'can mix objects and strings for origin default definition';
+        }
+        corp = [{origin:origins}];
+      }
+
+      // now the defaaults
+      corp = corp.map(function(d){
+        if (!d.origin) {
+          throw 'you must at least specify an origin';
+        }
+        d.method = d.method || ["GET"];
+        d.maxAgeSeconds = d.maxAgeSeconds || DEFAULT_CORS_AGE;
+        d.responseHeader = d.responseHeader || ["Content-Type","Origin"];
+        return d;
+      });
+
+    }
+   
+
+    throwRob_ (
+      "error setting cors " , 
+      fetch_(
+        getBucketPath_() + "?fields=cors%2Cid", {
+        method: "PATCH",
+        contentType: "application/json; charset=UTF-8",
+        payload: JSON.stringify({cors:corp})
+      }));
+    return self;
+
+  };
+  
+  function getMinimalInfo_ (key) {
+    return fetch_ (getBucketPath_() + "/o/" + encodeURIComponent(fudgeKey_(key)) + "?fields=selfLink,id");
+  }
   
   /**
   * @param {string} key get a self link
-  * @return {string} shttps://www.googleapis.com/storage/v1/b/xliberation.com/o/dump%2Fblogplay.json?fields=selfLink&key={YOUR_API_KEY}elf link
+  * @return {string} self link
   */
   self.getSelfLink = function (key) {
     
-    var rob = 
-      fetch_ (getBucketPath_() + "/o/" + encodeURIComponent(fudgeKey_(key)) + "?fields=selfLink");
-
+    var rob = getMinimalInfo_ (key);
     if (!rob.ok ) {
       throwRob_ ('error getting selfLink for ' + key ,rob);
     }
     return rob.error ? "" : rob.data.selfLink.replace(/s+$/g,"");
+
+    
+  };
+  
+  /**
+  * @param {string} key get a public link
+  * @return {string} public link
+  */
+  self.getPublicLink = function (key) {
+    
+    var rob = getMinimalInfo_ (key);
+    if (!rob.ok ) {
+      throwRob_ ('error getting public link for ' + key ,rob);
+    }
+    return rob.error ? "" :  gcsPublicEndpoint_ + "/" + bucket_ +"/" + fudgeKey_ (key);
+
+    
+  };
+  
+  /**
+  * @param {string} key get details
+  * @return {string} shttps://www.googleapis.com/storage/v1/b/xliberation.com/o/dump%2Fblogplay.json?fields=selfLink&key={YOUR_API_KEY}elf link
+  */
+  self.getResource = function (key) {
+    
+    var rob = 
+      fetch_ (getBucketPath_() + "/o/" + encodeURIComponent(fudgeKey_(key)));
+
+    if (!rob.ok ) {
+      throwRob_ ('error getting selfLink for ' + key ,rob);
+    }
+    return rob;
 
     
   };
